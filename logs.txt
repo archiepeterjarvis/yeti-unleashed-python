@@ -1,0 +1,7 @@
+---------------------------------
+Running at 2021-07-01 15:05:48.817587
+Inserted 0 rows into UnleashedCreditNotes
+Inserted 0 rows into UnleashedInvoices
+Inserted 0 rows into UnleashedInvoices
+Took 9.370417356491089s
+---------------------------------
