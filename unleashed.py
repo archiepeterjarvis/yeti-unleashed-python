@@ -3,6 +3,9 @@ import binascii
 import hashlib
 import hmac
 import pyodbc
+from pathlib import Path
+from datetime import datetime
+import time
 
 #Creds contains api keys and other sensitive info so is not included
 import creds
@@ -72,6 +75,26 @@ class UnleashedAPI(requests.auth.AuthBase):
         json_parsed = resp.json()
         return json_parsed['Items']
 
+class Logger:
+    def __init__(self):
+        self.file_name = 'logs.txt'
+        self.file_path = Path(__file__).resolve().parent
+        self.full_path = str(self.file_path) + "\\" + self.file_name
+
+        self.log("Running at " + str(datetime.now()))
+        self.start_time = time.time()
+        
+    def log(self, log):
+        with open(self.full_path, "a") as f: 
+            f.write(str(log) + "\n")
+
+    def stop_time(self):
+        self.stop_time = time.time()
+        elapsed = self.stop_time - self.start_time
+        self.log("Took " + str(elapsed) + "s")
+        self.log("---------------------------------")
+
+
 class DBConnection:
     def __init__(self):
         self.server = creds.server
@@ -104,7 +127,8 @@ class DBConnection:
             self.credit_guids.append(row[0])
             row = self.cursor.fetchone()
 
-    def insert_credit(self, data):
+    def insert_credit(self, data, _logger):
+        rows = 0
         for i in range(0, len(data)):
             for credit_line in data[i]["CreditLines"]:
                 if credit_line["Guid"] not in self.credit_guids:
@@ -113,8 +137,11 @@ class DBConnection:
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""", data[i]["CreditNoteNumber"], data[i]["InvoiceNumber"], data[i]["Status"], data[i]["Customer"]["CustomerCode"], data[i]["Customer"]["CustomerName"],
                     data[i]["Total"], credit_line["Product"]["ProductCode"], credit_line["CreditQuantity"], data[i]["CreditDate"], credit_line["Guid"])
                     self.cnn.commit()
+                    rows += 1
+        _logger.log("Inserted " + str(rows) + " rows into UnleashedCreditNotes")
 
-    def insert_invoices(self, data):
+    def insert_invoices(self, data, _logger):
+        rows = 0
         for i in range(0, len(data)):
             for invoice_line in data[i]["InvoiceLines"]:
                 if invoice_line["Guid"] not in self.invoice_guids:
@@ -124,13 +151,15 @@ class DBConnection:
                     data[i]["Total"], invoice_line["Product"]["ProductCode"], invoice_line["OrderQuantity"], invoice_line["UnitPrice"],
                     invoice_line["DiscountRate"], invoice_line["Guid"])
                     self.cnn.commit()
+                    rows += 1
+        _logger.log("Inserted " + str(rows) + " rows into UnleashedInvoices")
 
 #These two functions handle getting all pages
 #It will iterate through pages checking the object count returned
 #If there is 1000 objects it is a full page and will move to the next
 #If there's less than 1000 then it's the last page and it'll break the loop
 #This then runs the function to insert the data from each page into our db
-def run_credits(_api, _db):
+def run_credits(_api, _db, _logger):
     credits = []
 
     page = 1
@@ -144,9 +173,9 @@ def run_credits(_api, _db):
             break
 
     for credit in credits:
-        _db.insert_credit(credit)
+        _db.insert_credit(credit, _logger)
 
-def run_invoices(_api, _db):
+def run_invoices(_api, _db, _logger):
     invoices = []
 
     page = 1
@@ -160,17 +189,19 @@ def run_invoices(_api, _db):
             break
 
     for invoice in invoices:
-        _db.insert_invoices(invoice)
+        _db.insert_invoices(invoice, _logger)
 
 if __name__ == '__main__':
     _api = UnleashedAPI()
     _db = DBConnection()
+    _logger = Logger()
 
     _db.get_version()
     _db.get_all_guid_credit()
     _db.get_all_guid_invoices()
 
-    run_credits(_api, _db)
-    run_invoices(_api, _db)
+    run_credits(_api, _db, _logger)
+    run_invoices(_api, _db, _logger)
     
+    _logger.stop_time()
     
