@@ -127,6 +127,10 @@ class DBConnection:
             self.credit_guids.append(row[0])
             row = self.cursor.fetchone()
 
+    def parse_date(self, date):
+        millis = date.split('(')[1][:-2]
+        return datetime.fromtimestamp(int(millis)/1000.0).strftime('%Y-%m-%d')
+
     def insert_credit(self, data, _logger):
         rows = 0
         for i in range(0, len(data)):
@@ -135,7 +139,7 @@ class DBConnection:
                     self.cursor.execute("""
                     INSERT INTO UnleashedCreditNotes (CreditNoteNumber, InvoiceNumber, CreditStatus, CustomerCode, CustomerName, Total, ProductCode, CreditQuantity, CreditDate, Guid) 
                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""", data[i]["CreditNoteNumber"], data[i]["InvoiceNumber"], data[i]["Status"], data[i]["Customer"]["CustomerCode"], data[i]["Customer"]["CustomerName"],
-                    data[i]["Total"], credit_line["Product"]["ProductCode"], credit_line["CreditQuantity"], data[i]["CreditDate"], credit_line["Guid"])
+                    data[i]["Total"], credit_line["Product"]["ProductCode"], credit_line["CreditQuantity"], self.parse_date(data[i]["CreditDate"]), credit_line["Guid"])
                     self.cnn.commit()
                     rows += 1
         _logger.log("Inserted " + str(rows) + " rows into UnleashedCreditNotes")
@@ -147,7 +151,7 @@ class DBConnection:
                 if invoice_line["Guid"] not in self.invoice_guids:
                     self.cursor.execute("""
                     INSERT INTO UnleashedInvoices (InvoiceNumber, OrderNumber, InvoiceDate, InvoiceStatus, CustomerCode, CustomerName, Total, ProductCode, OrderQuantity, UnitPrice, DiscountRate, Guid)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""", data[i]["InvoiceNumber"], data[i]["OrderNumber"], data[i]["InvoiceDate"], data[i]["InvoiceStatus"], data[i]["Customer"]["CustomerCode"], data[i]["Customer"]["CustomerName"],
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);""", data[i]["InvoiceNumber"], data[i]["OrderNumber"], self.parse_date(data[i]["InvoiceDate"]), data[i]["InvoiceStatus"], data[i]["Customer"]["CustomerCode"], data[i]["Customer"]["CustomerName"],
                     data[i]["Total"], invoice_line["Product"]["ProductCode"], invoice_line["OrderQuantity"], invoice_line["UnitPrice"],
                     invoice_line["DiscountRate"], invoice_line["Guid"])
                     self.cnn.commit()
@@ -204,4 +208,3 @@ if __name__ == '__main__':
     run_invoices(_api, _db, _logger)
     
     _logger.stop_time()
-    
